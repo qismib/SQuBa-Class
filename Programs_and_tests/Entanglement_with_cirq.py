@@ -1,3 +1,17 @@
+import matplotlib
+import torch
+matplotlib.use('QtAgg') # Questo forzerà l'apertura nel browser internet
+import matplotlib.pyplot as plt
+
+plt.plot([1, 2, 3], [4, 5, 6])
+plt.title("Test Browser")
+#plt.show()
+
+print(torch.cat((torch.tensor([[1],[1]]),torch.tensor([[2],[2]])),0))
+print(torch.cat((torch.tensor([[1],[1]]),torch.tensor([[2],[2]])),-1))
+
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -51,7 +65,8 @@ class QuantumCircuit:
         # Misura sul primo qubit (qubit 0) con chiave 'm'
         self.circuit.append(cirq.measure(self.qubits[0], key='m'))
 
-
+     # gaia lo chiama "expectation_Z" ma non calcola davvero il valore di aspettazione, 
+     # calcola la probabilità che lo stato finale sia |1>
     def expectation_Z(self, counts, shots, n_qubits):
          expects = np.zeros(1)
          for key in counts.keys():
@@ -61,21 +76,26 @@ class QuantumCircuit:
          return expects
 
     def run(self, thetas):
-         thetas = thetas.squeeze()
+          # trasformo thetas in una lista di float, per farlo uso:
+          # .as_tensor() che trasforma qualunque cosa riceva come input in un tensore PyThorch
+          # .detach() scollega il tensore dal grafo (niente warning!)
+          # .squeeze() rimuove le dimensioni di batch inutili (es. da [[0.5]] a [0.5])
+          # .tolist() lo trasforma in una lista classica di float di Python
 
-         #creo un vocabolario con cui associo dei parametri PyTorch ai simboli di SyimPy 
-         param_resolver = {self.params[k]: float(thetas[k].item()) for k in range(self.n_qubits)}
+          thetas_list= torch.as_tensor(thetas, dtype=torch.float32).detach().squeeze().tolist()
 
-         #simulazione del circuito per un numero di volte pari a self.shots, usando i parametri risolti
-         #ovvero i parametri ai quali viene associato un valore numerico
-         result = cirq.Simulator().run(self.circuit, param_resolver=param_resolver, repetitions=self.shots)
+          #creo un vocabolario con cui associo dei parametri PyTorch ai simboli di SyimPy 
+          param_resolver = {self.params[k]: thetas_list[k] for k in range(self.n_qubits)}
 
-         #istogramma dei conteggi
-         counts = result.histogram(key='m') #conta quante volte il risultato è stato 0 e quante 1
-         print(counts)
-         #calcolo del valore di aspettazione
-         expectation = self.expectation_Z(counts, self.shots, self.n_qubits)
-         return expectation
+          #simulazione del circuito per un numero di volte pari a self.shots, usando i parametri risolti
+          #ovvero i parametri ai quali viene associato un valore numerico
+          result = cirq.Simulator().run(self.circuit, param_resolver=param_resolver, repetitions=self.shots)
+
+          #istogramma dei conteggi
+          counts = result.histogram(key='m') #conta quante volte il risultato è stato 0 e quante 1
+          #calcolo del valore di aspettazione
+          expectation = self.expectation_Z(counts, self.shots, self.n_qubits)
+          return expectation
 
 
 class HybridFunction(Function):
@@ -100,7 +120,7 @@ class HybridFunction(Function):
          return result
 
      @staticmethod
-     def backward(ctx, grad_output): # grad_output è il gradiente proveniente dai layer classici successivi
+     def backward(ctx, grad_outputs): # grad_outputs è il gradiente proveniente dai layer classici successivi
          # calcolo i gradienti del circuito quantitico tramitre la Parameter-Shift Rule
          input, = ctx.saved_tensors #recupero l'input salvato nel forward pass
          input_list = input.squeeze().tolist()  #converto il tensore in una lista di float
@@ -124,19 +144,133 @@ class HybridFunction(Function):
 
          #Per la Chain Rule moltiplico per il gradiente in uscita dai layer successivi 
          # per i gradienti del layer quantistico
-         grad_input = gradients_tensor * grad_output
+         grad_input = gradients_tensor * grad_outputs
 
          # Ritorno il gradiente con lo stesso shape dell'input iniziale,
          # e 'None' per gli altri argomenti non addestrabili di forward() (quantum_circuit e shift)
          return grad_input.view_as(input), None, None
 
+class Hybrid(nn.Module):
+     def __init__(self, n_qubits, shots, shift):
+          super().__init__()
+          # creo un istanza della classe QuantumCircuit per poter usare il circuito quantistico
+          self.quantum_circuit = QuantumCircuit(n_qubits, shots) 
+          self.shift = shift
+
+     def forward(self, input):
+          return HybridFunction.apply(input, self.quantum_circuit, self.shift)
+          # .apply() crea l'oggetto ctx, nel quale salviamo i parametri 
+          # e le vaire istanze (.shift, .quantum_circuit) che servono 
+          # per il calcolo dei gradienti, ed esegue il forward
+
+def show_img(X):
+    image, label = X
+    print(f"Image shape: {image.shape}")
+    plt.imshow(image.squeeze(), cmap="gray") # image shape is [1, 28, 28] (colour channels, height, width)  
+    plt.title(f"Label: {label} ")
+    plt.show()
+    print(image.squeeze().shape, image.shape) # the squeeze() function removes the colour channel dimension
+
+# definisco il numero di campioni per classe per l'addestramento
+n_samples = 100
+
+# carico il dataset MNIST 
+x_train = datasets.MNIST(root='./data', train=True, download=True,
+                          transform=transforms.Compose([transforms.ToTensor()]))
+
+# filtro solo le cifre 0 e 1 con un numero di elementi pari a n_samples per ogni classe
+# il comando np.where ci da liste di indici  
+idx = np.append(
+    np.where(x_train.targets == 0)[0][:n_samples],
+    np.where(x_train.targets == 1)[0][:n_samples] )
+# i dataset supportano la funzione di indexing avanzato, passando un numpy array o un tensore
+# verrà interpretato come lista di indici. Così facendo i training data saranno solo quelli
+# selezionati
+x_train.data= x_train.data[idx]
+x_train.targets = x_train.targets[idx]
+#show_img(x_train[107])
+#print(x_train.targets[101])
+
+#creo il DataLoader per pytorch
+# Nota: trovi spiegazioni su questo comando nelle note salvate su Notebook llm
+train_loader = torch.utils.data.DataLoader(x_train, batch_size=1, shuffle= True)
+
+#costruisco la rete neurale
+class Net(nn.Module):
+     def __init__(self, n_qubits, shots, shift):
+          super().__init__()
+          self.layer_1 = nn.Linear(784,128) #passa 784 pixel a 128 neuroni
+          self.layer_2 = nn.Linear(128,64) #riduco ulteriormente le dimensioni a 64 neuroni
+          self.layer_3 = nn.Linear(64, n_qubits) #l'ultima riduzione fa si che i parametri
+          #di output del secondo layer diventino dello stesso numero dei qubit del circuito quantistico
+          self.hybrid = Hybrid(n_qubits, shots, shift)
+     def forward(self, x):
+          # Appiattisco l'immagine da (1, 28, 28) a (1, 784)
+          # Il 728 dice a PyTorch in quante colonne ridistribuire i dati,
+          # il -1 gli dice di calcolare da solo quante righe servono per farlo. 
+          x = x.view(-1, 784)
+          x = F.relu(self.layer_1(x))
+          x = F.relu(self.layer_2(x))
+          # Non applichiamo la ReLU qui perché gli angoli di rotazione quantistici 
+          # devono poter assumere anche valori negativi (da -pi a pi).
+          x = self.layer_3(x) 
+          # Passaggio nel simulatore quantistico Cirq per estrarre la probabilità P(1)
+          x = self.hybrid(x)
+          # restituisco il vettore di probabilità bidimensionale (P(1), P(0)), .cat() concatena
+          # la probabilità del qubit 0 di collassare in |1> con la sua complementare 1 - P(1)
+          return torch.cat((x, 1.0 - x), -1) #il -1 fa si che si ottenga un vettore (p1 p0)
+          # orizzontale, se avessi scritto 0 al posto di -1, .cat avrebbe dato un vettore verticale
+
+def training_loop(n_epochs, optim, model, loss_fn, train_loader):
+     loss_values = [] #memorizzza la loss media per ogni epoca
+     for epoch in range(n_epochs):
+          total_loss = []  #memorizzza la loss media per ogni batch
+          for batch, (data,target) in enumerate(train_loader):
+               # zero grad
+               optim.zero_grad()
+               #Forward Pass
+               output = model(data)
+               #calculate the loss
+               loss = loss_fn(output, target)
+               #Backward Pass
+               loss.backward()
+               #minimize the loss
+               optim.step()
+
+               total_loss.append(loss.item())
+
+          # calcolo la loss media dell'epoca
+          avg_loss = sum(total_loss)/len(total_loss)
+          loss_values.append(avg_loss)
+
+          #stampo l'avanzamento
+          percent_done = 100 * (epoch + 1) / n_epochs
+          print(f"Epoch {epoch+1:2d}/{n_epochs} [{percent_done:3.0f}%] ---- Loss Media: {avg_loss:.4f}")
+
+     return loss_values
 
 
-C=QuantumCircuit(n_qubits, n_shots)
+model = Net(n_qubits, n_shots, shift)
+params = list(model.parameters())
+optimizer = torch.optim.Adam(params, lr=learning_rate)
+loss_func = nn.CrossEntropyLoss()
+
+model.train()
+epochs = 15
+loss_list = training_loop(epochs, optimizer, model, loss_func, train_loader)
+
+plt.figure(figsize=(8,5))
+plt.plot(loss_list )
+plt.xlabel('Epoche')
+plt.ylabel('Cross Entropy Loss')
+plt.show()
+
+"""C=QuantumCircuit(n_qubits, n_shots)
 print(C.circuit)
 #print(C.expectation_Z(counts,n_shots, n_qubits))
 rotations = torch.tensor([np.pi/4 for i in range(n_qubits)])
 #rot = torch.tensor([np.pi / 4] * 3, dtype=torch.float32)
 exp = C.run(rotations)
 
-print(f"Valore atteso (probabilità P(1)) per rotazione pi/4: {exp}")
+print(f"Valore atteso (probabilità P(1)) per rotazione pi/4: {exp}")"""
+
