@@ -212,7 +212,7 @@ class Net(nn.Module):
           x = self.hybrid(x)
           # restituisco il vettore di probabilità bidimensionale (P(1), P(0)), .cat() concatena
           # la probabilità del qubit 0 di collassare in |1> con la sua complementare 1 - P(1)
-          return torch.cat((x, 1.0 - x), -1) #il -1 fa si che si ottenga un vettore (p1 p0)
+          return torch.cat(( 1.0 - x, x), -1) #il -1 fa si che si ottenga un vettore (p1 p0)
           # orizzontale, se avessi scritto 0 al posto di -1, .cat avrebbe dato un vettore verticale
 
 def training_loop(n_epochs, optim, model, loss_fn, train_loader):
@@ -259,11 +259,45 @@ plt.xlabel('Epoche')
 plt.ylabel('Cross Entropy Loss')
 plt.show()
 
-"""C=QuantumCircuit(n_qubits, n_shots)
-print(C.circuit)
-#print(C.expectation_Z(counts,n_shots, n_qubits))
-rotations = torch.tensor([np.pi/4 for i in range(n_qubits)])
-#rot = torch.tensor([np.pi / 4] * 3, dtype=torch.float32)
-exp = C.run(rotations)
+# VALIDAZIONE DEL MODELLO
 
-print(f"Valore atteso (probabilità P(1)) per rotazione pi/4: {exp}")"""
+#raccolgo 1000 immagini per ogni classe (0, 1)
+n_val_samples = 1000
+
+x_test = datasets.MNIST(root='./data', train=False, download=True,
+                        transform=transforms.Compose([transforms.ToTensor()]))
+
+idx_test = np.append(np.where(x_test.targets == 0)[0][:n_val_samples],
+                     np.where(x_test.targets == 1)[0][:n_val_samples] 
+                     )
+x_test.data = x_test.data[idx_test]
+x_test.targets = x_test.targets[idx_test]
+
+#creo il dataloader con shuffle=False dato che non abbiamo bisogno di mescolare i dati di test
+test_loader = torch.utils.data.DataLoader(x_test, batch_size=1, shuffle=False)
+
+def validate(model, test_loader, loss_func):
+     model.eval()# 1. Disattiva Dropout e imposta la rete in modalità test
+     test_loss = 0
+     correct = 0
+     with torch.no_grad(): #disattivo il calcolo dei gradienti
+          for data, target in test_loader:
+               output=model(data)
+               loss = loss_func(output, target)
+               test_loss += loss.item()
+
+               #calcolo la predizione, la probabilità più alta che il qubit sia 0 o 1
+               pred = output.argmax(dim=1, keepdim=True)
+               #confrontiamola con la label reale
+               correct += pred.eq(target.view_as(pred)).sum().item()
+     #calcoliamo la loss media e l'accuracy 
+     test_loss /= len(test_loader)
+     accuracy = 100. * correct / len(test_loader.dataset)
+     print("\n=================== VALIDATION RESULTS ===================")
+     print(f"Loss Media sul Validation Set: {test_loss:.4f}")
+     print(f"Accuratezza Finale: {correct}/{len(test_loader.dataset)} ({accuracy:.2f}%)")
+     print("==========================================================\n")
+    
+     return test_loss, accuracy
+
+validate(model, test_loader,loss_func)
