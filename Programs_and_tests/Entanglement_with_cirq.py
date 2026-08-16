@@ -13,6 +13,9 @@ import itertools
 import cirq
 import sympy #serve per creare simboli che rappresentano parametri variabili nei circuiti quantistici
 
+"""import warnings
+# Forza Python a lanciare un'eccezione (crash) appena incontra un UserWarning
+warnings.filterwarnings('error', category=UserWarning)"""
 
 # Variabili globali
 n_qubits = 3
@@ -36,7 +39,6 @@ class QuantumCircuit:
         self.circuit.append(cirq.H(self.qubits[0]))
         for i in range(n_qubits-1):
             self.circuit.append(cirq.CNOT(self.qubits[i], self.qubits[i+1]))
-            print(i)
 
          # Applico Rz su ogni qubit usando i parametri SymPy
          # in cirq uso cirq.rz(angolo di rotazione)(qubit che voglio ruotare)
@@ -101,8 +103,10 @@ class HybridFunction(Function):
          expectation_z = ctx.quantum_circuit.run(input)
 
          #converto il risultato ottenuto in un tensore
-         result = torch.tensor([expectation_z], dtype=torch.float32)
-
+         result = torch.tensor([[expectation_z.item()]], dtype=torch.float32)
+         # l'uso di .item() ha lo scopo di alleggerire il codice, un po' come è satato fatto
+         # per gradient_tensor usando np.array(). Il fatto che usiamo le doppie parentesi quadre
+         # è perchè la crossentropyloss richiede una fromattazione specifica (vedi note Notebook llm)
          return result
 
      @staticmethod
@@ -125,8 +129,12 @@ class HybridFunction(Function):
 
               gradients.append((expectation_right - expectation_left)/2.0)
 
-         #converto i gradienti in un tensore pytorch
-         gradients_tensor = torch.tensor(gradients, dtype=torch.float32)
+         # La funzione expectation_Z restituisce degli array NumPy quindi gradients
+         # sarà un array di NumPy array ognguno in un punto diverso della memoria. 
+         # Questo rallenta il processo, per ottimizzarlo scriviamo np.array(gradients) 
+         # così da avere un unico array NumPy. Così facendo, trasformarlo in tensore con 
+         # torch.tensor() sarà molto più efficiente.
+         gradients_tensor = torch.tensor(np.array(gradients), dtype=torch.float32)
 
          #Per la Chain Rule moltiplico per il gradiente in uscita dai layer successivi 
          # per i gradienti del layer quantistico
@@ -259,4 +267,3 @@ rotations = torch.tensor([np.pi/4 for i in range(n_qubits)])
 exp = C.run(rotations)
 
 print(f"Valore atteso (probabilità P(1)) per rotazione pi/4: {exp}")"""
-
