@@ -1,17 +1,3 @@
-import matplotlib
-import torch
-matplotlib.use('QtAgg') # Questo forzerà l'apertura nel browser internet
-import matplotlib.pyplot as plt
-
-plt.plot([1, 2, 3], [4, 5, 6])
-plt.title("Test Browser")
-#plt.show()
-
-print(torch.cat((torch.tensor([[1],[1]]),torch.tensor([[2],[2]])),0))
-print(torch.cat((torch.tensor([[1],[1]]),torch.tensor([[2],[2]])),-1))
-
-
-
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
