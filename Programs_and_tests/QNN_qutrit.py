@@ -387,3 +387,49 @@ plt.plot(loss_list )
 plt.xlabel('Epoche')
 plt.ylabel('Cross Entropy Loss')
 plt.show()
+
+
+# VALIDAZIONE DEL MODELLO
+
+#raccolgo 1000 immagini per ogni classe (0, 1)
+n_val_samples = 1000
+
+x_test = datasets.MNIST(root='./data', train=False, download=True,
+                        transform=transforms.Compose([transforms.ToTensor()]))
+
+idx_test = np.concatenate([
+                        np.where(x_test.targets == 0)[0][:n_samples],
+                        np.where(x_test.targets == 1)[0][:n_samples],
+                        np.where(x_test.targets == 2)[0][:n_samples]
+                        ])
+x_test.data = x_test.data[idx_test]
+x_test.targets = x_test.targets[idx_test]
+
+#creo il dataloader con shuffle=False dato che non abbiamo bisogno di mescolare i dati di test
+test_loader = torch.utils.data.DataLoader(x_test, batch_size=1, shuffle=False)
+
+def validate(model, test_loader, loss_func):
+     model.eval()# 1. Disattiva Dropout e imposta la rete in modalità test
+     test_loss = 0
+     correct = 0
+     with torch.no_grad(): #disattivo il calcolo dei gradienti
+          for data, target in test_loader:
+               output=model(data)
+               loss = loss_func(output, target)
+               test_loss += loss.item()
+
+               #calcolo la predizione, la probabilità più alta 
+               pred = output.argmax(dim=1, keepdim=True)
+               #confrontiamola con la label reale
+               correct += pred.eq(target.view_as(pred)).sum().item()
+     #calcolo la loss media e l'accuracy 
+     test_loss /= len(test_loader)
+     accuracy = 100. * correct / len(test_loader.dataset)
+     print("\n=================== VALIDATION RESULTS ===================")
+     print(f"Loss Media sul Validation Set: {test_loss:.4f}")
+     print(f"Accuratezza Finale: {correct}/{len(test_loader.dataset)} ({accuracy:.2f}%)")
+     print("==========================================================\n")
+    
+     return test_loss, accuracy
+
+validate(model, test_loader,loss_func)
