@@ -95,9 +95,9 @@ class Y_P_ij(Gate):
         return ()
 
     def _resolve_parameters_(self, resolver, recursive):
-        """Restituisce un nuovo gate Z_P_ij sostituendo il simbolo con il float risolto."""
+        """Restituisce un nuovo gate Y_P_ij sostituendo il simbolo con il float risolto."""
         resolved_phase = resolver.value_of(self.phase, recursive)
-        return X_P_ij(self.i, self.j, dimension=self.d, phase=resolved_phase)
+        return Y_P_ij(self.i, self.j, dimension=self.d, phase=resolved_phase)
 # rotation around X for the ij couple
 class X_P_ij(Gate):
 
@@ -133,7 +133,7 @@ class X_P_ij(Gate):
         return ()
 
     def _resolve_parameters_(self, resolver, recursive):
-        """Restituisce un nuovo gate Z_P_ij sostituendo il simbolo con il float risolto."""
+        """Restituisce un nuovo gate X_P_ij sostituendo il simbolo con il float risolto."""
         resolved_phase = resolver.value_of(self.phase, recursive)
         return X_P_ij(self.i, self.j, dimension=self.d, phase=resolved_phase)
 # Hadamard with dimension d
