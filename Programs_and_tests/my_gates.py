@@ -71,7 +71,7 @@ class Y_P_ij(Gate):
         return (self.d,)
 
     def _unitary_(self):
-        matrix = np.eye(self.d, dtype=complex) - np.eye(3, dtype=complex) 
+        matrix = np.eye(self.d, dtype=complex)
         matrix[self.i][self.i] = matrix[self.j][self.j] = np.cos(self.phase / 2)
         matrix[self.j][self.i] = np.sin(self.phase / 2)
         matrix[self.i][self.j] = -np.sin(self.phase / 2)
