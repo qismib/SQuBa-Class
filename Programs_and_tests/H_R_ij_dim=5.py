@@ -173,7 +173,7 @@ n_samples = 100
 x_train = datasets.MNIST(root='./data', train=True, download=True,
                           transform=transforms.Compose([transforms.ToTensor()]))
 
-# filtro solo le cifre 0 e 1 con un numero di elementi pari a n_samples per ogni classe
+# filtro solo le cifre 0, 1, 2, 3, 4 con un numero di elementi pari a n_samples per ogni classe
 idx = np.concatenate([
     np.where(x_train.targets == 0)[0][:n_samples],
     np.where(x_train.targets == 1)[0][:n_samples],
