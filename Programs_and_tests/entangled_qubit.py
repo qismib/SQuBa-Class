@@ -7,7 +7,7 @@ import torch.optim as optim
 from torch.autograd import Function
 from torchvision import datasets, transforms
 import itertools
-
+import time
 
 # Cirq 
 import cirq
@@ -18,7 +18,7 @@ import sympy #serve per creare simboli che rappresentano parametri variabili nei
 n_qubits = 3
 n_shots = 1000
 shift = np.pi / 2
-learning_rate = 0.01
+learning_rate = 0.0005
 
 class QuantumCircuit:
     def __init__(self, n_qubits, shots):
@@ -34,7 +34,7 @@ class QuantumCircuit:
 
          # Applico Hadamard su q0 e CNOT a cascata
         self.circuit.append(cirq.H(self.qubits[0]))
-        for i in range(n_qubits-1):
+        for i in range(self.n_qubits-1):
             self.circuit.append(cirq.CNOT(self.qubits[i], self.qubits[i+1]))
 
          # Applico Rz su ogni qubit usando i parametri SymPy
@@ -49,7 +49,7 @@ class QuantumCircuit:
         
         # Misura sul primo qubit (qubit 0) con chiave 'm'
         self.circuit.append(cirq.measure(self.qubits[0], key='m'))
-
+        print(self.circuit)
      # gaia lo chiama "expectation_Z" ma non calcola davvero il valore di aspettazione, 
      # calcola la probabilità che lo stato finale sia |1>
     def expectation_Z(self, counts, shots, n_qubits):
@@ -61,19 +61,13 @@ class QuantumCircuit:
          return expects
 
     def run(self, thetas):
-          # trasformo thetas in una lista di float, per farlo uso:
-          # .as_tensor() che trasforma qualunque cosa riceva come input in un tensore PyThorch
-          # .detach() scollega il tensore dal grafo (niente warning!)
-          # .squeeze() rimuove le dimensioni di batch inutili (es. da [[0.5]] a [0.5])
-          # .tolist() lo trasforma in una lista classica di float di Python
 
           thetas_list= torch.as_tensor(thetas, dtype=torch.float32).detach().squeeze().tolist()
 
           #creo un vocabolario con cui associo dei parametri PyTorch ai simboli di SyimPy 
           param_resolver = {self.params[k]: thetas_list[k] for k in range(self.n_qubits)}
 
-          #simulazione del circuito per un numero di volte pari a self.shots, usando i parametri risolti
-          #ovvero i parametri ai quali viene associato un valore numerico
+          #simulazione del circuito per un numero di volte pari a self.shots
           result = cirq.Simulator().run(self.circuit, param_resolver=param_resolver, repetitions=self.shots)
 
           #istogramma dei conteggi
@@ -84,7 +78,7 @@ class QuantumCircuit:
 
 
 class HybridFunction(Function):
-     @staticmethod 
+     @staticmethod
      def forward(ctx, input, quantum_circuit, shift):
          # ctx è un oggetto che viene creato ed inserito automaticamente da PyTorch 
          # quando eseguiamo il forward pass. Serve come canale di comunicazione per conservare
@@ -101,12 +95,11 @@ class HybridFunction(Function):
 
          #converto il risultato ottenuto in un tensore
          result = torch.tensor([[expectation_z.item()]], dtype=torch.float32)
-         # Il fatto che usiamo le doppie parentesi quadre
-         # è perchè la crossentropyloss richiede una fromattazione specifica 
+
          return result
 
      @staticmethod
-     def backward(ctx, grad_outputs): # grad_outputs è il gradiente proveniente dai layer classici successivi
+     def backward(ctx, grad_outputs):
          # calcolo i gradienti del circuito quantitico tramitre la Parameter-Shift Rule
          input, = ctx.saved_tensors #recupero l'input salvato nel forward pass
          input_list = input.squeeze().tolist()  #converto il tensore in una lista di float
@@ -151,10 +144,10 @@ class Hybrid(nn.Module):
 def show_img(X):
     image, label = X
     print(f"Image shape: {image.shape}")
-    plt.imshow(image.squeeze(), cmap="gray") # image shape is [1, 28, 28] (colour channels, height, width)  
+    plt.imshow(image.squeeze(), cmap="gray") # la dimensione dell'immagine è [1, 28, 28] (colour channels, height, width)  
     plt.title(f"Label: {label} ")
     plt.show()
-    print(image.squeeze().shape, image.shape) # the squeeze() function removes the colour channel dimension
+    print(image.squeeze().shape, image.shape) # la funzione squeeze() rimuove la dimensione del colour channels
 
 # definisco il numero di campioni per classe per l'addestramento
 n_samples = 100
@@ -163,23 +156,72 @@ n_samples = 100
 x_train = datasets.MNIST(root='./data', train=True, download=True,
                           transform=transforms.Compose([transforms.ToTensor()]))
 
-# filtro solo le cifre 0 e 1 con un numero di elementi pari a n_samples per ogni classe
-# il comando np.where ci da liste di indici  
+# filtro solo le cifre 0 e 1 con un numero di elementi pari a n_samples per ogni classe 
 idx = np.append(
     np.where(x_train.targets == 0)[0][:n_samples],
     np.where(x_train.targets == 1)[0][:n_samples] )
-# i dataset supportano la funzione di indexing avanzato, passando un numpy array o un tensore
-# verrà interpretato come lista di indici. Così facendo i training data saranno solo quelli
-# selezionati
+
 x_train.data= x_train.data[idx]
 x_train.targets = x_train.targets[idx]
-#show_img(x_train[107])
-#print(x_train.targets[101])
+
 
 #creo il DataLoader per pytorch
+
 train_loader = torch.utils.data.DataLoader(x_train, batch_size=1, shuffle= True)
 
 #costruisco la rete neurale
+
+"""class Net(nn.Module):
+    def __init__(self, n_qubits, shots, shift):
+        super(Net, self).__init__()
+        
+        # 1. Primo layer convoluzionale: 1 canale in ingresso (grayscale), 6 canali in uscita, filtro 5x5
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5)
+        
+        # 2. Secondo layer convoluzionale: 6 canali in ingresso, 16 in uscita, filtro 5x5
+        self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5)
+        
+        # 3. Dropout per disattivare casualmente canali durante il training e ridurre l'overfitting
+        #self.dropout = nn.Dropout2d()
+        
+        # 4. Layer Fully Connected: riceve 256 feature estratte dalle convoluzioni e le riduce a 64
+        self.fc1 = nn.Linear(256, 64)
+        
+        # 5. Secondo layer Fully Connected: passa da 64 neuroni al numero di parametri/qubit necessari
+        self.fc2 = nn.Linear(64, n_qubits)
+        
+        # 6. Layer quantistico (Cirq / PyTorch Hybrid)
+        self.hybrid = Hybrid(n_qubits, shots, shift)
+
+    def forward(self, x):
+        # NOTA: L'immagine in ingresso NON va appiattita all'inizio! 
+        # Deve mantenere la forma 2D (batch_size, 1, 28, 28).
+        
+        # Convoluzione 1 -> ReLU -> Max Pooling 2x2: passa da (1, 28, 28) a (6, 12, 12)
+        x = F.max_pool2d(F.relu(self.conv1(x)), kernel_size=2)
+        
+        # Convoluzione 2 -> ReLU -> Max Pooling 2x2: passa da (6, 12, 12) a (16, 4, 4)
+        x = F.max_pool2d(F.relu(self.conv2(x)), kernel_size=2)
+        
+        # Applicazione del Dropout 2D sui canali di feature
+        #x = self.dropout(x)
+        
+        # Appiattimento (Flattening): da (16, 4, 4) a un vettore 1D di 16 * 4 * 4 = 256 elementi
+        x = x.view(-1, 256)
+        
+        # Primo layer fully connected con attivazione ReLU
+        x = F.relu(self.fc1(x))
+        
+        # Secondo layer fully connected (senza attivazione ReLU, per consentire angoli negativi)
+        x = self.fc2(x)
+        
+        # Passaggio nel circuito quantistico
+        x = self.hybrid(x)
+        
+        # Concatenazione delle probabilità complementari P(0) e P(1)
+        return torch.cat((1.0 - x, x), dim=-1)
+"""
+
 class Net(nn.Module):
      def __init__(self, n_qubits, shots, shift):
           super().__init__()
@@ -208,6 +250,9 @@ class Net(nn.Module):
 def training_loop(n_epochs, optim, model, loss_fn, train_loader):
      loss_values = [] #memorizzza la loss media per ogni epoca
      for epoch in range(n_epochs):
+
+          start_time = time.perf_counter()  # 1. Registra il tempo di inizio epoca
+
           total_loss = []  #memorizzza la loss media per ogni batch
           for batch, (data,target) in enumerate(train_loader):
                # zero grad
@@ -223,71 +268,102 @@ def training_loop(n_epochs, optim, model, loss_fn, train_loader):
 
                total_loss.append(loss.item())
 
+          end_time = time.perf_counter()    # Registra il tempo di fine epoca
+          elapsed_time = end_time - start_time # Tempo totale dell'epoca in secondi
+          epoch_times.append(elapsed_time)
+
           # calcolo la loss media dell'epoca
           avg_loss = sum(total_loss)/len(total_loss)
           loss_values.append(avg_loss)
 
           #stampo l'avanzamento
           percent_done = 100 * (epoch + 1) / n_epochs
-          print(f"Epoch {epoch+1:2d}/{n_epochs} [{percent_done:3.0f}%] ---- Loss Media: {avg_loss:.4f}")
+          print(f"Epoch {epoch+1:2d}/{n_epochs} [{percent_done:3.0f}%] ---- Loss Media: {avg_loss:.4f} ---- Time:{elapsed_time:.2f}")
 
      return loss_values
 
 
-model = Net(n_qubits, n_shots, shift)
-params = list(model.parameters())
-optimizer = torch.optim.Adam(params, lr=learning_rate)
-loss_func = nn.CrossEntropyLoss()
+#Fisso un seed manualmente per abilitare la riproducibilità 
+torch.manual_seed(42) 
 
-model.train()
-epochs = 15
-loss_list = training_loop(epochs, optimizer, model, loss_func, train_loader)
+avg_time_perf = []
+tot_time_perf = []
+acc_perf = []
 
-plt.figure(figsize=(8,5))
-plt.plot(loss_list )
-plt.xlabel('Epoche')
-plt.ylabel('Cross Entropy Loss')
-plt.show()
+number_of_test=10
 
-# VALIDAZIONE DEL MODELLO
+for i in range(number_of_test):
 
-#raccolgo 1000 immagini per ogni classe (0, 1)
-n_val_samples = 1000
+     model = Net(n_qubits, n_shots, shift)
+     params = list(model.parameters())
+     optimizer = torch.optim.Adam(params, lr=learning_rate)
+     loss_func = nn.CrossEntropyLoss()
 
-x_test = datasets.MNIST(root='./data', train=False, download=True,
-                        transform=transforms.Compose([transforms.ToTensor()]))
-
-idx_test = np.append(np.where(x_test.targets == 0)[0][:n_val_samples],
-                     np.where(x_test.targets == 1)[0][:n_val_samples] 
-                     )
-x_test.data = x_test.data[idx_test]
-x_test.targets = x_test.targets[idx_test]
-
-#creo il dataloader con shuffle=False dato che non abbiamo bisogno di mescolare i dati di test
-test_loader = torch.utils.data.DataLoader(x_test, batch_size=1, shuffle=False)
-
-def validate(model, test_loader, loss_func):
-     model.eval()# 1. Disattiva Dropout e imposta la rete in modalità test
-     test_loss = 0
-     correct = 0
-     with torch.no_grad(): #disattivo il calcolo dei gradienti
-          for data, target in test_loader:
-               output=model(data)
-               loss = loss_func(output, target)
-               test_loss += loss.item()
-
-               #calcolo la predizione, la probabilità più alta che il qubit sia 0 o 1
-               pred = output.argmax(dim=1, keepdim=True)
-               #confrontiamola con la label reale
-               correct += pred.eq(target.view_as(pred)).sum().item()
-     #calcoliamo la loss media e l'accuracy 
-     test_loss /= len(test_loader)
-     accuracy = 100. * correct / len(test_loader.dataset)
-     print("\n=================== VALIDATION RESULTS ===================")
-     print(f"Loss Media sul Validation Set: {test_loss:.4f}")
-     print(f"Accuratezza Finale: {correct}/{len(test_loader.dataset)} ({accuracy:.2f}%)")
+     model.train()
+     epochs = 15
+     epoch_times = []
+     loss_list = training_loop(epochs, optimizer, model, loss_func, train_loader)
+     average_epoch_times = sum(epoch_times)/epochs
+     print(f"\n=================== TIME PERFORMANCE {i} ===================")
+     print(f"Total training time:{sum(epoch_times):.2f} --- Average time per epoch: {average_epoch_times:.2f}")
      print("==========================================================\n")
-    
-     return test_loss, accuracy
+     avg_time_perf.append(average_epoch_times)
+     tot_time_perf.append(sum(epoch_times))
 
-validate(model, test_loader,loss_func)
+     # VALIDAZIONE DEL MODELLO
+
+     #raccolgo 1000 immagini per ogni classe (0, 1)
+     n_val_samples = 1000
+
+     x_test = datasets.MNIST(root='./data', train=False, download=True,
+                         transform=transforms.Compose([transforms.ToTensor()]))
+
+     idx_test = np.append(np.where(x_test.targets == 0)[0][:n_val_samples],
+                         np.where(x_test.targets == 1)[0][:n_val_samples] 
+                         )
+     x_test.data = x_test.data[idx_test]
+     x_test.targets = x_test.targets[idx_test]
+
+     #creo il dataloader con shuffle=False dato che non abbiamo bisogno di mescolare i dati di test
+     test_loader = torch.utils.data.DataLoader(x_test, batch_size=1, shuffle=False)
+
+     def validate(model, test_loader, loss_func):
+          model.eval()# Disattiva Dropout e imposta la rete in modalità test
+          test_loss = 0
+          correct = 0
+          with torch.no_grad(): #disattivo il calcolo dei gradienti
+               for data, target in test_loader:
+                    output=model(data)
+                    loss = loss_func(output, target)
+                    test_loss += loss.item()
+
+                    #calcolo la predizione, la probabilità più alta che il qubit sia 0 o 1
+                    pred = output.argmax(dim=1, keepdim=True)
+                    #confrontiamola con la label reale
+                    correct += pred.eq(target.view_as(pred)).sum().item()
+          #calcoliamo la loss media e l'accuracy 
+          test_loss /= len(test_loader)
+          accuracy = 100. * correct / len(test_loader.dataset)
+          print("\n=================== VALIDATION RESULTS ===================")
+          print(f"Loss Media sul Validation Set: {test_loss:.4f}")
+          print(f"Accuratezza Finale: {correct}/{len(test_loader.dataset)} ({accuracy:.2f}%)")
+          print("==========================================================\n")
+          acc_perf.append(accuracy)
+          return test_loss, accuracy
+
+     validate(model, test_loader,loss_func)
+
+for i in range(number_of_test):
+    print(f"performance of test number {i}: total train time={tot_time_perf[i]:.2f} s --- average time per epoch={avg_time_perf[i]:.2f} s --- {acc_perf[i]:.2f}%")
+
+
+#testo formattato per essere inserito in un file scritto in latex
+
+print('tot,time_vec-------------------------------------------------------------')
+print(" & ".join(f"{x:.0f}" for x in tot_time_perf))
+print('avg_per epoch time_vec---------------------------------------------------'  )
+print(" & ".join(f"{x:.2f}" for x in avg_time_perf))
+print('acc_vec------------------------------------------------------------------'  )
+print(" & ".join(f"{x:.2f}" for x in acc_perf))
+
+
