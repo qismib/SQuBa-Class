@@ -43,8 +43,6 @@ class QuantumCircuit:
         self.circuit = cirq.Circuit()
 
         # Definisco i parametri variazionali usando i simboli di sympy.
-        # Definisco d parametri dato che apllico rotazioni alle coppie di livelli
-        # energetici (per d=3 --> R_01, R_12, R_20)
         self.params = [sympy.Symbol(f'p{i}') for i in range(10)]
 
         # Definisco il curcuito
