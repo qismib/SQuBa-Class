@@ -13,9 +13,6 @@ import itertools
 import cirq
 import sympy #serve per creare simboli che rappresentano parametri variabili nei circuiti quantistici
 
-"""import warnings
-# Forza Python a lanciare un'eccezione (crash) appena incontra un UserWarning
-warnings.filterwarnings('error', category=UserWarning)"""
 
 # Variabili globali
 n_qubits = 3
@@ -87,7 +84,7 @@ class QuantumCircuit:
 
 
 class HybridFunction(Function):
-     @staticmethod #Nota: trovi spiegazioni su questo comando nelle note salvate su Notebook llm
+     @staticmethod 
      def forward(ctx, input, quantum_circuit, shift):
          # ctx è un oggetto che viene creato ed inserito automaticamente da PyTorch 
          # quando eseguiamo il forward pass. Serve come canale di comunicazione per conservare
@@ -104,9 +101,8 @@ class HybridFunction(Function):
 
          #converto il risultato ottenuto in un tensore
          result = torch.tensor([[expectation_z.item()]], dtype=torch.float32)
-         # l'uso di .item() ha lo scopo di alleggerire il codice, un po' come è satato fatto
-         # per gradient_tensor usando np.array(). Il fatto che usiamo le doppie parentesi quadre
-         # è perchè la crossentropyloss richiede una fromattazione specifica (vedi note Notebook llm)
+         # Il fatto che usiamo le doppie parentesi quadre
+         # è perchè la crossentropyloss richiede una fromattazione specifica 
          return result
 
      @staticmethod
@@ -129,11 +125,6 @@ class HybridFunction(Function):
 
               gradients.append((expectation_right - expectation_left)/2.0)
 
-         # La funzione expectation_Z restituisce degli array NumPy quindi gradients
-         # sarà un array di NumPy array ognguno in un punto diverso della memoria. 
-         # Questo rallenta il processo, per ottimizzarlo scriviamo np.array(gradients) 
-         # così da avere un unico array NumPy. Così facendo, trasformarlo in tensore con 
-         # torch.tensor() sarà molto più efficiente.
          gradients_tensor = torch.tensor(np.array(gradients), dtype=torch.float32)
 
          #Per la Chain Rule moltiplico per il gradiente in uscita dai layer successivi 
@@ -186,7 +177,6 @@ x_train.targets = x_train.targets[idx]
 #print(x_train.targets[101])
 
 #creo il DataLoader per pytorch
-# Nota: trovi spiegazioni su questo comando nelle note salvate su Notebook llm
 train_loader = torch.utils.data.DataLoader(x_train, batch_size=1, shuffle= True)
 
 #costruisco la rete neurale
