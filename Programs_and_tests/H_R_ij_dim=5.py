@@ -58,7 +58,7 @@ class QuantumCircuit:
         # Misuro il qudit 0 con chiave 'm'
         self.circuit.append(cirq.measure(self.qudit, key='m'))
         print(self.circuit)
-        # Calcolo le probabilità che qudit=|0>,|1>,|2>
+        # Calcolo le probabilità che qudit=|0>,|1>,|2>,|3>,|4>
     def calc_prob(self, counts, shots, dimension):
         self.vocabulary_of_values_and_probabilities = {}
         vector_probabilities = [0.0]*dimension # fondamentale, se nel circuito non venisse misurato un parametro non verrebbe passato, la dimensione del vocabolario sarebbe inferiore e darebbe errore
