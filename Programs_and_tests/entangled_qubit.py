@@ -50,8 +50,7 @@ class QuantumCircuit:
         # Misura sul primo qubit (qubit 0) con chiave 'm'
         self.circuit.append(cirq.measure(self.qubits[0], key='m'))
         print(self.circuit)
-     # gaia lo chiama "expectation_Z" ma non calcola davvero il valore di aspettazione, 
-     # calcola la probabilità che lo stato finale sia |1>
+ 
     def expectation_Z(self, counts, shots, n_qubits):
          expects = np.zeros(1)
          for key in counts.keys():
