@@ -267,12 +267,6 @@ for i in range(number_of_test):
     avg_time_perf.append(average_epoch_times)
     tot_time_perf.append(sum(epoch_times))
 
-    #plt.figure(figsize=(8,5))
-    #plt.plot(loss_list )
-    #plt.xlabel('Epoche')
-    #plt.ylabel('Cross Entropy Loss')
-    #plt.show()
-
 
     # VALIDAZIONE DEL MODELLO
 
@@ -294,7 +288,7 @@ for i in range(number_of_test):
     test_loader = torch.utils.data.DataLoader(x_test, batch_size=1, shuffle=False)
 
     def validate(model, test_loader, loss_func):
-        model.eval()# 1. Disattiva Dropout e imposta la rete in modalità test
+        model.eval()
         test_loss = 0
         correct = 0
         with torch.no_grad(): #disattivo il calcolo dei gradienti
