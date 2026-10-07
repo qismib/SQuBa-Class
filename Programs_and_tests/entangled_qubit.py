@@ -171,57 +171,6 @@ train_loader = torch.utils.data.DataLoader(x_train, batch_size=1, shuffle= True)
 
 #costruisco la rete neurale
 
-"""class Net(nn.Module):
-    def __init__(self, n_qubits, shots, shift):
-        super(Net, self).__init__()
-        
-        # 1. Primo layer convoluzionale: 1 canale in ingresso (grayscale), 6 canali in uscita, filtro 5x5
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=6, kernel_size=5)
-        
-        # 2. Secondo layer convoluzionale: 6 canali in ingresso, 16 in uscita, filtro 5x5
-        self.conv2 = nn.Conv2d(in_channels=6, out_channels=16, kernel_size=5)
-        
-        # 3. Dropout per disattivare casualmente canali durante il training e ridurre l'overfitting
-        #self.dropout = nn.Dropout2d()
-        
-        # 4. Layer Fully Connected: riceve 256 feature estratte dalle convoluzioni e le riduce a 64
-        self.fc1 = nn.Linear(256, 64)
-        
-        # 5. Secondo layer Fully Connected: passa da 64 neuroni al numero di parametri/qubit necessari
-        self.fc2 = nn.Linear(64, n_qubits)
-        
-        # 6. Layer quantistico (Cirq / PyTorch Hybrid)
-        self.hybrid = Hybrid(n_qubits, shots, shift)
-
-    def forward(self, x):
-        # NOTA: L'immagine in ingresso NON va appiattita all'inizio! 
-        # Deve mantenere la forma 2D (batch_size, 1, 28, 28).
-        
-        # Convoluzione 1 -> ReLU -> Max Pooling 2x2: passa da (1, 28, 28) a (6, 12, 12)
-        x = F.max_pool2d(F.relu(self.conv1(x)), kernel_size=2)
-        
-        # Convoluzione 2 -> ReLU -> Max Pooling 2x2: passa da (6, 12, 12) a (16, 4, 4)
-        x = F.max_pool2d(F.relu(self.conv2(x)), kernel_size=2)
-        
-        # Applicazione del Dropout 2D sui canali di feature
-        #x = self.dropout(x)
-        
-        # Appiattimento (Flattening): da (16, 4, 4) a un vettore 1D di 16 * 4 * 4 = 256 elementi
-        x = x.view(-1, 256)
-        
-        # Primo layer fully connected con attivazione ReLU
-        x = F.relu(self.fc1(x))
-        
-        # Secondo layer fully connected (senza attivazione ReLU, per consentire angoli negativi)
-        x = self.fc2(x)
-        
-        # Passaggio nel circuito quantistico
-        x = self.hybrid(x)
-        
-        # Concatenazione delle probabilità complementari P(0) e P(1)
-        return torch.cat((1.0 - x, x), dim=-1)
-"""
-
 class Net(nn.Module):
      def __init__(self, n_qubits, shots, shift):
           super().__init__()
